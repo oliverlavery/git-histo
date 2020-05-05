@@ -103,13 +103,15 @@ def term_formatter(file_entry):
 
 
 if __name__ == '__main__':
-    parser = OptionParser()
+    parser = OptionParser(version="%prog version 0.1. https://github.com/oliverlavery/git-histo")
     parser.add_option("-r", "--recursive", dest="recurse", default=False, action="store_true",
         help="recurse through sub-directories")
     parser.add_option("-s", "--sort", dest="sort", default=False, action="store_true",
         help="sort output by most recent commits")
     parser.add_option("-m", "--maxage", dest="maxage", default=False, action="store",
         help="maximum age of commits, in iso8601 format (e.g.: 'P1Y3M1W' for 1 year, 3 months, 1 week)")
+    parser.add_option("-a", "--age", dest="age", default='P1Y', action="store",
+        help="age range for histogram, in iso8601 format. Default is 1 year.")
     parser.add_option("-p", "--path", dest="path", default=".", action="store",
         help="path to search, defaults to current directory")
     parser.add_option("-c", "--csv", dest="csv", default=False, action="store_true",
@@ -126,9 +128,18 @@ if __name__ == '__main__':
         ((i, os.popen('git log -1 --pretty="format:%%ct::%%cr::%%h::%%ce" %s' % i).read().split('::')) for i in file_iter)
     )
 
+    # Set the histogram age range
+    interval = isodate.parse_duration(options.age)
+    if not type(interval) is datetime.timedelta:
+        interval = interval.totimedelta(start = datetime.date.today())
+    term_histo_days = interval.days
+
     if options.maxage:
+        # max age overrides the age range
         interval = isodate.parse_duration(options.maxage)
-        term_histo_days = interval.totimedelta(start = datetime.date.today()).days
+        if not type(interval) is datetime.timedelta:
+            interval = interval.totimedelta(start = datetime.date.today())
+        term_histo_days = interval.days
         print("term_histo_days ", term_histo_days)
         log_gen = filter(lambda x: older_than_filter(interval, int(x[1][0])), log_gen)
 
