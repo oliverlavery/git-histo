@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+from optparse import OptionParser
+import glob
+import itertools
+import os
+import datetime
+from functools import partial
+import isodate
+import shutil
+
+def older_than_filter(interval, timestamp):
+    dt = datetime.date.fromtimestamp(timestamp)
+    return datetime.date.today() - interval <= dt
+
+def csv_escape(str):
+    if ',' in str:
+        return '"'+str+'"'
+    else:
+        return str
+
+def csv_formatter(file_entry):
+    return csv_escape(file_entry[0]) + \
+        ',' + csv_escape(file_entry[1][0]) + \
+        ',' + csv_escape(file_entry[1][1]) + \
+        ',' + csv_escape(file_entry[1][2]) + \
+        ',' + csv_escape(file_entry[1][3])
+
+# Terminal Output Setup
+class term_colors:
+    reset='\033[0m'
+    bold='\033[01m'
+    disable='\033[02m'
+    underline='\033[04m'
+    reverse='\033[07m'
+    strikethrough='\033[09m'
+    invisible='\033[08m'
+    class fg:
+        black='\033[30m'
+        red='\033[31m'
+        green='\033[32m'
+        orange='\033[33m'
+        blue='\033[34m'
+        purple='\033[35m'
+        cyan='\033[36m'
+        lightgrey='\033[37m'
+        darkgrey='\033[90m'
+        lightred='\033[91m'
+        lightgreen='\033[92m'
+        yellow='\033[93m'
+        lightblue='\033[94m'
+        pink='\033[95m'
+        lightcyan='\033[96m'
+    class bg:
+        black='\033[40m'
+        red='\033[41m'
+        green='\033[42m'
+        orange='\033[43m'
+        blue='\033[44m'
+        purple='\033[45m'
+        cyan='\033[46m'
+        lightgrey='\033[47m'
+
+term_size = shutil.get_terminal_size((80,20))
+term_divider = term_colors.fg.cyan + "|" + term_colors.reset
+term_divider_width = 1
+term_histo_width = 20
+term_histo_days = 365*2
+term_sha_width = 10
+term_name_width = term_size.columns - ( term_divider_width * 2 + term_histo_width + term_sha_width )
+
+def term_histo_color(blocks):
+    colormap = (
+                term_colors.fg.lightgreen,
+                term_colors.fg.green,
+                term_colors.fg.orange,
+                term_colors.fg.yellow,
+                term_colors.fg.lightred,
+                term_colors.fg.red,
+    )
+    return colormap[int((blocks / term_histo_width) * (len(colormap)-1))]
+
+def term_histo(timestamp):
+    dt = datetime.date.fromtimestamp(timestamp)
+    days = (datetime.date.today() - dt).days
+    blocks = int((term_histo_days - days) / (term_histo_days / term_histo_width))
+    if blocks < 0:
+        blocks = 0
+    histo_str = ' ' + str(days) + ' days' + (term_histo_width - (len(str(days)) + 6)) * ' '
+    histo_str = term_histo_color(blocks) + term_colors.reverse + \
+         histo_str[:blocks] + term_colors.reset + histo_str[blocks:]
+    return histo_str
+
+def term_formatter(file_entry):
+    pad = ''
+    name = file_entry[0]
+    if len(name) > term_name_width:
+        name = '...' + name[-(term_name_width - 3):]
+    else:
+        pad = ' ' * (term_name_width - len(name))
+    return name + pad + term_divider \
+        + file_entry[1][2] + (term_sha_width - len(file_entry[1][2])) * ' ' \
+        + term_divider + term_histo(int(file_entry[1][0]))
+
+
+if __name__ == '__main__':
+    parser = OptionParser()
+    parser.add_option("-r", "--recursive", dest="recurse", default=False, action="store_true",
+        help="recurse through sub-directories")
+    parser.add_option("-s", "--sort", dest="sort", default=False, action="store_true",
+        help="sort output by most recent commits")
+    parser.add_option("-m", "--maxage", dest="maxage", default=False, action="store",
+        help="maximum age of commits, in iso8601 format (e.g.: 'P1Y3M1W' for 1 year, 3 months, 1 week)")
+    parser.add_option("-p", "--path", dest="path", default=".", action="store",
+        help="path to search, defaults to current directory")
+    parser.add_option("-c", "--csv", dest="csv", default=False, action="store_true",
+        help="CSV format output")
+    (options, args) = parser.parse_args()
+
+    if options.recurse:
+        file_iter = glob.iglob(options.path+"/**", recursive=True)
+    else:
+        file_iter = glob.iglob(options.path+"/*")
+
+    # This filter excludes files with no git history...
+    log_gen = filter(lambda x: len(x[1]) > 1,
+        ((i, os.popen('git log -1 --pretty="format:%%ct::%%cr::%%h::%%ce" %s' % i).read().split('::')) for i in file_iter)
+    )
+
+    if options.maxage:
+        interval = isodate.parse_duration(options.maxage)
+        term_histo_days = interval.totimedelta(start = datetime.date.today()).days
+        print("term_histo_days ", term_histo_days)
+        log_gen = filter(lambda x: older_than_filter(interval, int(x[1][0])), log_gen)
+
+    if options.sort:
+        log_gen = sorted(log_gen, key=lambda x: x[1][0], reverse=True)
+
+    if options.csv:
+        formatter = csv_formatter
+    else:
+        formatter = term_formatter
+
+    for i in (formatter(x) for x in log_gen):
+        print(i)
