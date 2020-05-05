@@ -125,7 +125,7 @@ if __name__ == '__main__':
 
     # This filter excludes files with no git history...
     log_gen = filter(lambda x: len(x[1]) > 1,
-        ((i, os.popen('git log -1 --pretty="format:%%ct::%%cr::%%h::%%ce" %s' % i).read().split('::')) for i in file_iter)
+        ((i, os.popen('git log -1 --pretty="format:%%ct::%%cr::%%h::%%ce" -- %s' % i).read().split('::')) for i in file_iter)
     )
 
     # Set the histogram age range
