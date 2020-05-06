@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-from optparse import OptionParser
+from argparse import ArgumentParser
 import glob
 import itertools
 import os
 import datetime
-from functools import partial
 import isodate
 import shutil
 
@@ -103,25 +102,33 @@ def term_formatter(file_entry):
 
 
 if __name__ == '__main__':
-    parser = OptionParser(version="%prog version 0.1. https://github.com/oliverlavery/git-histo")
-    parser.add_option("-r", "--recursive", dest="recurse", default=False, action="store_true",
+    parser = ArgumentParser(description="Displays histogram-like list of git modification times. https://github.com/oliverlavery/git-histo")
+    parser.add_argument('--version', action='version', version='%(prog)s 0.2')
+    parser.add_argument("path", metavar="PATH", nargs="*", action="append",
+        help="Files or paths to display")
+    parser.add_argument("-r", "--recursive", dest="recurse", default=False, action="store_true",
         help="recurse through sub-directories")
-    parser.add_option("-s", "--sort", dest="sort", default=False, action="store_true",
+    parser.add_argument("-s", "--sort", dest="sort", default=False, action="store_true",
         help="sort output by most recent commits")
-    parser.add_option("-m", "--maxage", dest="maxage", default=False, action="store",
+    parser.add_argument("-m", "--maxage", dest="maxage", default=False, action="store",
         help="maximum age of commits, in iso8601 format (e.g.: 'P1Y3M1W' for 1 year, 3 months, 1 week)")
-    parser.add_option("-a", "--age", dest="age", default='P1Y', action="store",
+    parser.add_argument("-a", "--age", dest="age", default='P1Y', action="store",
         help="age range for histogram, in iso8601 format. Default is 1 year.")
-    parser.add_option("-p", "--path", dest="path", default=".", action="store",
-        help="path to search, defaults to current directory")
-    parser.add_option("-c", "--csv", dest="csv", default=False, action="store_true",
+    parser.add_argument("-c", "--csv", dest="csv", default=False, action="store_true",
         help="CSV format output")
-    (options, args) = parser.parse_args()
-
-    if options.recurse:
-        file_iter = glob.iglob(options.path+"/**", recursive=True)
-    else:
-        file_iter = glob.iglob(options.path+"/*")
+    args = parser.parse_args()
+    args.path = args.path[0]
+    if len(args.path) == 0:
+        args.path.append('.')
+    file_iter = iter(())
+    for p in args.path:
+        if os.path.isdir(p):
+            if args.recurse:
+                file_iter = itertools.chain(file_iter, glob.iglob(p+"/**", recursive=True))
+            else:
+                file_iter = itertools.chain(file_iter, glob.iglob(p+"/*"))
+        else:
+            file_iter = itertools.chain(file_iter, glob.iglob(p))
 
     # This filter excludes files with no git history...
     log_gen = filter(lambda x: len(x[1]) > 1,
@@ -129,24 +136,23 @@ if __name__ == '__main__':
     )
 
     # Set the histogram age range
-    interval = isodate.parse_duration(options.age)
+    interval = isodate.parse_duration(args.age)
     if not type(interval) is datetime.timedelta:
         interval = interval.totimedelta(start = datetime.date.today())
     term_histo_days = interval.days
 
-    if options.maxage:
+    if args.maxage:
         # max age overrides the age range
-        interval = isodate.parse_duration(options.maxage)
+        interval = isodate.parse_duration(args.maxage)
         if not type(interval) is datetime.timedelta:
             interval = interval.totimedelta(start = datetime.date.today())
         term_histo_days = interval.days
-        print("term_histo_days ", term_histo_days)
         log_gen = filter(lambda x: older_than_filter(interval, int(x[1][0])), log_gen)
 
-    if options.sort:
+    if args.sort:
         log_gen = sorted(log_gen, key=lambda x: x[1][0], reverse=True)
 
-    if options.csv:
+    if args.csv:
         formatter = csv_formatter
     else:
         formatter = term_formatter
