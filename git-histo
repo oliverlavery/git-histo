@@ -69,19 +69,19 @@ term_name_width = term_size.columns - ( term_divider_width * 2 + term_histo_widt
 
 def term_histo_color(blocks):
     colormap = (
-                term_colors.fg.lightgreen,
                 term_colors.fg.green,
+                term_colors.fg.lightgreen,
                 term_colors.fg.orange,
                 term_colors.fg.yellow,
                 term_colors.fg.lightred,
                 term_colors.fg.red,
     )
-    return colormap[int((blocks / term_histo_width) * (len(colormap)-1))]
+    return colormap[int(round((blocks / term_histo_width) * (len(colormap)-1)))]
 
 def term_histo(timestamp):
     dt = datetime.date.fromtimestamp(timestamp)
     days = (datetime.date.today() - dt).days
-    blocks = int((term_histo_days - days) / (term_histo_days / term_histo_width))
+    blocks = int(round((term_histo_days - days) / (term_histo_days / term_histo_width)))
     if blocks < 0:
         blocks = 0
     histo_str = ' ' + str(days) + ' days' + (term_histo_width - (len(str(days)) + 6)) * ' '
