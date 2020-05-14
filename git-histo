@@ -7,7 +7,7 @@ import datetime
 import isodate
 import shutil
 
-def older_than_filter(interval, timestamp):
+def older_than(interval, timestamp):
     dt = datetime.date.fromtimestamp(timestamp)
     return datetime.date.today() - interval <= dt
 
@@ -147,7 +147,7 @@ if __name__ == '__main__':
         if not type(interval) is datetime.timedelta:
             interval = interval.totimedelta(start = datetime.date.today())
         term_histo_days = interval.days
-        log_gen = filter(lambda x: older_than_filter(interval, int(x[1][0])), log_gen)
+        log_gen = filter(lambda x: older_than(interval, int(x[1][0])), log_gen)
 
     if args.sort:
         log_gen = sorted(log_gen, key=lambda x: x[1][0], reverse=True)
